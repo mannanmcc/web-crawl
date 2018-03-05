@@ -3,57 +3,31 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 )
 
-type node struct {
-	Type                    NodeType
-	Data                    string
-	Attr                    []Attribute
-	FirstChild, NextSibling *node
-}
-
-type pageContent struct {
-	title string
-	links []string
-}
-
-type NodeType int32
-
-const (
-	ErrorNode NodeType = iota
-	TextNode
-	DocumentNode
-	ElementNode
-	CommentNode
-	DoctypeNode
-)
-
-type Attribute struct {
-	Key, Val string
-}
-
 func main() {
-	var url string
-	var dup bool
-	flag.StringVar(&url, "url", "http://page.local", "the url to parse")
-	flag.BoolVar(&dup, "dup", false, "if set, check for duplicates")
-	flag.Parse()
-
-	if url == "" {
-		flag.PrintDefaults()
+	if len(os.Args) < 2 {
+		fmt.Printf("Provide url to start crawling")
 		os.Exit(1)
 	}
 
-	visited := map[string]string{}
+	uri := os.Args[1]
 
-	deep := 1
-	analyze(url, url, &visited, deep)
+	if uri == "" {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+	//parse the url
+	u, _ := url.Parse(uri)
+	baseURL := u.Scheme + "://" + u.Host
+
+	visited := map[string]string{}
+	crawlingDepth := 3
+	crawl(uri, baseURL, &visited, crawlingDepth)
+
 	for link, title := range visited {
 		fmt.Printf("%s -> %s\n", link, title)
-	}
-
-	if dup {
-		checkDuplicates(&visited)
 	}
 }
