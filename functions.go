@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/html"
 )
 
-func crawl(url, baseURL string, visited *map[string]string, deepth int) {
-	fmt.Println("anaylysing......")
+func crawl(url, baseURL string, visited *map[string]string, pageNumber int, wg *sync.WaitGroup, ch chan pageContent) {
 	page, err := parse(url)
 
 	if err != nil {
@@ -25,18 +25,21 @@ func crawl(url, baseURL string, visited *map[string]string, deepth int) {
 	assets := findAllStaticAssets(nil, page)
 
 	item := pageContent{
+		url,
 		title,
 		internalLinks,
 		externalLinks,
 		assets,
 	}
 
-	fmt.Printf(" Result for the page: %s :::::::::::::::::::::::::::::::::::: %+v\n", url, item)
+	ch <- item
 
 	for _, link := range internalLinks {
 		if (*visited)[link] == "" && strings.HasPrefix(link, baseURL) {
-			if deepth > 0 {
-				crawl(link, baseURL, visited, deepth-1)
+			pageNumber = pageNumber - 1
+			if pageNumber > 0 {
+				fmt.Println("firing new crawl:", pageNumber)
+				crawl(link, baseURL, visited, pageNumber, wg, ch)
 			}
 		}
 	}
@@ -160,4 +163,30 @@ func parse(url string) (*html.Node, error) {
 	}
 
 	return b, err
+}
+
+func generatePageSiteMap(page pageContent) {
+	fmt.Println("<page>")
+	fmt.Printf(" <title>%s</title>\n", page.title)
+	fmt.Printf(" <url>%s</url>\n", page.url)
+	fmt.Println(" <internalLinks>")
+	for _, link := range page.internalLinks {
+		fmt.Printf("  <link>%s</link>\n", link)
+	}
+	fmt.Println(" </internalLinks>")
+
+	fmt.Println(" <externalLinks>")
+	for _, link := range page.externalLinks {
+		fmt.Printf("  <link>%s</link>\n", link)
+	}
+	fmt.Println(" </externalLinks>")
+
+	fmt.Println(" <assets>")
+	for _, asset := range page.assets {
+		fmt.Printf("  <asset>%s</asset>\n", asset)
+	}
+	fmt.Println(" </assets>")
+
+	fmt.Println("</page>")
+	fmt.Println()
 }
