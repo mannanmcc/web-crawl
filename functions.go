@@ -1,20 +1,49 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
 	"golang.org/x/net/html"
 )
 
+func getPageURLAndPageNumber() (string, int) {
+	var numberOfPageToCrawl int
+	var err error
+
+	if len(os.Args) < 2 {
+		fmt.Printf("Provide url to start crawling")
+		os.Exit(1)
+	}
+
+	numberOfPageToCrawl = 10
+	if len(os.Args) > 2 {
+		if numberOfPageToCrawl, err = strconv.Atoi(os.Args[2]); err != nil {
+			fmt.Println("Oops. wrong page number provided..")
+			os.Exit(1)
+		}
+	}
+
+	uri := os.Args[1]
+
+	if uri == "" {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	return uri, numberOfPageToCrawl
+}
 func crawl(url, baseURL string, visited *map[string]string, pageNumber int, wg *sync.WaitGroup, ch chan pageContent) {
 	page, err := parse(url)
 
 	if err != nil {
-		fmt.Printf("Error getting page %s %s\n", url, err)
+		fmt.Println(err)
 		return
 	}
 
@@ -64,7 +93,7 @@ func getPageLinks(links []string, n *html.Node) []string {
 	if n.Type == html.ElementNode && n.Data == "a" {
 		for _, a := range n.Attr {
 			if a.Key == "href" {
-				if !sliceContains(links, a.Val) {
+				if !isArray(links, a.Val) {
 					links = append(links, a.Val)
 				}
 			}
@@ -76,6 +105,15 @@ func getPageLinks(links []string, n *html.Node) []string {
 	}
 
 	return links
+}
+
+func isArray(items []string, value string) bool {
+	for _, v := range items {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }
 
 func separateLinks(links []string, baseURL string) (internalLinks []string, externalLinks []string) {
@@ -111,7 +149,7 @@ func findCSSAssets(links []string, n *html.Node) []string {
 	if n.Type == html.ElementNode && n.Data == "link" {
 		for _, a := range n.Attr {
 			if a.Key == "href" {
-				if !sliceContains(links, a.Val) {
+				if !isArray(links, a.Val) {
 					links = append(links, a.Val)
 				}
 			}
@@ -129,7 +167,7 @@ func findJSAssets(links []string, n *html.Node) []string {
 	if n.Type == html.ElementNode && n.Data == "script" {
 		for _, a := range n.Attr {
 			if a.Key == "src" {
-				if !sliceContains(links, a.Val) {
+				if !isArray(links, a.Val) {
 					links = append(links, a.Val)
 				}
 			}
@@ -143,26 +181,18 @@ func findJSAssets(links []string, n *html.Node) []string {
 	return links
 }
 
-func sliceContains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
-
 func parse(url string) (*html.Node, error) {
-	r, err := http.Get(url)
+	response, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot get page")
+		return nil, fmt.Errorf("can not crawl this page: %s", url)
 	}
-	b, err := html.Parse(r.Body)
+
+	respBody, err := html.Parse(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot parse page")
 	}
 
-	return b, err
+	return respBody, err
 }
 
 func generatePageSiteMap(page pageContent) {
