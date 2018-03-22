@@ -39,8 +39,10 @@ func getPageURLAndPageNumber() (string, int) {
 
 	return uri, numberOfPageToCrawl
 }
-func crawl(url, baseURL string, visited *map[string]string, pageNumber int, wg *sync.WaitGroup, ch chan pageContent) {
+func crawl(url, baseURL string, visited *map[string]string, c *counter, wg *sync.WaitGroup, ch chan pageContent) {
+	//retrieve page content
 	page, err := parse(url)
+	wg.Done()
 
 	if err != nil {
 		fmt.Println(err)
@@ -53,22 +55,23 @@ func crawl(url, baseURL string, visited *map[string]string, pageNumber int, wg *
 	internalLinks, externalLinks := separateLinks(links, baseURL)
 	assets := findAllStaticAssets(nil, page)
 
-	item := pageContent{
+	singlePageResult := pageContent{
 		url,
 		title,
 		internalLinks,
 		externalLinks,
 		assets,
 	}
+	//send result through channel for a single page
+	ch <- singlePageResult
 
-	ch <- item
-
+	//now we need to crawl all the links we found within the page just crawled until it cross max crawl limit
 	for _, link := range internalLinks {
 		if (*visited)[link] == "" && strings.HasPrefix(link, baseURL) {
-			pageNumber = pageNumber - 1
-			if pageNumber > 0 {
-				fmt.Println("firing new crawl:", pageNumber)
-				crawl(link, baseURL, visited, pageNumber, wg, ch)
+			if c.getNumber() > 0 {
+				c.UpdateNumber()
+				fmt.Println("firing crawling on page:", c.getNumber())
+				go crawl(link, baseURL, visited, c, wg, ch)
 			}
 		}
 	}

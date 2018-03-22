@@ -5,9 +5,22 @@ import (
 	"sync"
 )
 
+type counter struct {
+	number int
+}
+
+func (c *counter) UpdateNumber() {
+	c.number--
+}
+
+func (c *counter) getNumber() int {
+	return c.number
+}
+
 func main() {
-	wg := new(sync.WaitGroup)
+	wg := &sync.WaitGroup{}
 	uri, numberOfPageToCrawl := getPageURLAndPageNumber()
+	counter := &counter{number: numberOfPageToCrawl}
 
 	u, _ := url.Parse(uri)
 	baseURL := u.Scheme + "://" + u.Host
@@ -15,17 +28,17 @@ func main() {
 	visited := map[string]string{}
 	pageContentChannel := make(chan pageContent)
 
-	wg.Add(1)
+	wg.Add(numberOfPageToCrawl + 1)
 	go func() {
 		defer wg.Done()
-		crawl(uri, baseURL, &visited, numberOfPageToCrawl, wg, pageContentChannel)
+		counter.UpdateNumber()
+		crawl(uri, baseURL, &visited, counter, wg, pageContentChannel)
 	}()
 
 	go func() {
 		wg.Wait()
 		close(pageContentChannel)
 	}()
-
 	for page := range pageContentChannel {
 		generatePageSiteMap(page)
 	}
